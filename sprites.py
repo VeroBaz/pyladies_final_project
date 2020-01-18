@@ -1,6 +1,7 @@
 # Sprites for the game
 
 import pygame
+import random
 from settings import *
 from graphics import *
 vector = pygame.math.Vector2
@@ -21,6 +22,7 @@ class Player(pygame.sprite.Sprite):
         self.position = vector(WIDTH / 10, HEIGHT - HEIGHT / 4)
         self.velocity = vector(0, 0)
         self.acceleration = vector(0, 0)
+        self.health = 100
 
     def jump(self):
         # Jump only if standing on platform
@@ -63,12 +65,12 @@ class Player(pygame.sprite.Sprite):
         if self.walking:
             if current_time - self.last_update > 100:
                 self.last_update = current_time
-                self.current_image = (self.current_image + 1) % len(walk_right)
+                self.current_image = (self.current_image + 1) % len(run_right)
                 bottom = self.rect.bottom
                 if self.velocity.x > 0:
-                    self.image = walk_right[self.current_image]
+                    self.image = run_right[self.current_image]
                 else:
-                    self.image = walk_left[self.current_image]
+                    self.image = run_left[self.current_image]
         # Get info - character jumping
         if self.velocity.y != 0:
             self.jumping = True
@@ -86,12 +88,21 @@ class Player(pygame.sprite.Sprite):
                     self.image = jump_left[self.current_image]
         # TO DO Get info - character attack
         # TO DO Show attack animation
+        # Show dying animation
+        if self.health <= 0:
+            if current_time - self.last_update > 100:
+                self.last_update = current_time
+                self.current_image = (self.current_image + 1) % len(die_right)
+                if self.velocity.x == 0 or self.velocity.x > 0:
+                    self.image = die_right[self.current_image]
+                else:
+                    self.image = die_left[self.current_image]
 
 class Platform(pygame.sprite.Sprite):
-    def __init__(self, game, x, y, type=platform_images[0]):
+    def __init__(self, game, x, y, image=platform_images[0]):
         pygame.sprite.Sprite.__init__(self)
         self.game = game
-        self.image = type
+        self.image = image
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
@@ -104,3 +115,28 @@ class Groundfloor(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = 0
         self.rect.y = HEIGHT - 20
+
+class Coin(pygame.sprite.Sprite):
+    def __init__(self, game):
+        pygame.sprite.Sprite.__init__(self)
+        self.game = game
+        self.image = coin_image[0]
+        self.last_update = 0
+        self.rect = self.image.get_rect()
+        self.location = random.choice(coins_locations)
+        self.last_location = self.location
+        self.rect.x = self.location[0]
+        self.rect.y = self.location[1]
+
+    def change_position(self):
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_update > 8000:
+            self.last_update = current_time
+            while self.location == self.last_location:
+                self.location = random.choice(coins_locations)
+                self.rect.x = self.location[0]
+                self.rect.y = self.location[1]
+            self.last_location = self.location
+
+    def update(self):
+        self.change_position()
