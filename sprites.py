@@ -1,10 +1,11 @@
 # Sprites for the game
 
 import pygame
-import random
+from random import choice
 from settings import *
 from graphics import *
 vector = pygame.math.Vector2
+
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, game):
@@ -19,10 +20,12 @@ class Player(pygame.sprite.Sprite):
         self.last_update = 0
         self.image = standing_right[0]
         self.rect = self.image.get_rect()
+        # Shrink rectangle so the collisions are less sensitive
+        self.rect.inflate_ip(-8.6, -7.7)
         self.position = vector(WIDTH / 10, HEIGHT - HEIGHT / 4)
         self.velocity = vector(0, 0)
         self.acceleration = vector(0, 0)
-        self.health = 100
+        self.lives = 3
 
     def jump(self):
         # Jump only if standing on platform
@@ -38,7 +41,7 @@ class Player(pygame.sprite.Sprite):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] and self.rect.x > 0:
             self.acceleration.x = -PLAYER_ACCELERATION
-        if keys[pygame.K_RIGHT] and self.rect.x + 30 < WIDTH:
+        if keys[pygame.K_RIGHT] and self.rect.x + self.image.get_size()[0] < WIDTH:
             self.acceleration.x = PLAYER_ACCELERATION
 
         # Apply friction
@@ -51,8 +54,10 @@ class Player(pygame.sprite.Sprite):
         self.rect.midbottom = self.position
 
         # Keep player within the window
-        self.edges = pygame.Surface((WIDTH, HEIGHT)).get_rect()
-        self.rect.clamp_ip(self.edges)
+        if self.rect.right > WIDTH:
+            self.rect.right = WIDTH
+        if self.rect.left < 0:
+            self.rect.left = 0
 
     def animate(self):
         current_time = pygame.time.get_ticks()
@@ -65,12 +70,11 @@ class Player(pygame.sprite.Sprite):
         if self.walking:
             if current_time - self.last_update > 100:
                 self.last_update = current_time
-                self.current_image = (self.current_image + 1) % len(run_right)
-                bottom = self.rect.bottom
+                self.current_image = (self.current_image + 1) % len(walk_right)
                 if self.velocity.x > 0:
-                    self.image = run_right[self.current_image]
+                    self.image = walk_right[self.current_image]
                 else:
-                    self.image = run_left[self.current_image]
+                    self.image = walk_left[self.current_image]
         # Get info - character jumping
         if self.velocity.y != 0:
             self.jumping = True
@@ -78,25 +82,14 @@ class Player(pygame.sprite.Sprite):
             self.jumping = False
         # Show jumping animation
         if self.jumping:
-            if current_time - self.last_update > 200:
+            if current_time - self.last_update > 100:
                 self.last_update = current_time
                 self.current_image = (self.current_image + 1) % len(jump_right)
-                bottom = self.rect.bottom
                 if self.velocity.x == 0 or self.velocity.x > 0:
                     self.image = jump_right[self.current_image]
                 else:
                     self.image = jump_left[self.current_image]
-        # TO DO Get info - character attack
-        # TO DO Show attack animation
-        # Show dying animation
-        if self.health <= 0:
-            if current_time - self.last_update > 100:
-                self.last_update = current_time
-                self.current_image = (self.current_image + 1) % len(die_right)
-                if self.velocity.x == 0 or self.velocity.x > 0:
-                    self.image = die_right[self.current_image]
-                else:
-                    self.image = die_left[self.current_image]
+
 
 class Platform(pygame.sprite.Sprite):
     def __init__(self, game, x, y, image=platform_images[0]):
@@ -107,36 +100,83 @@ class Platform(pygame.sprite.Sprite):
         self.rect.x = x
         self.rect.y = y
 
-class Groundfloor(pygame.sprite.Sprite):
+
+class GroundFloor(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
         self.image = pygame.Surface((WIDTH, HEIGHT - 20))
         self.image.set_alpha(0)
         self.rect = self.image.get_rect()
         self.rect.x = 0
-        self.rect.y = HEIGHT - 20
+        self.rect.y = HEIGHT - 30
 
-class Coin(pygame.sprite.Sprite):
-    def __init__(self, game):
+
+class InteractiveSprites(pygame.sprite.Sprite):
+    def __init__(self):
         pygame.sprite.Sprite.__init__(self)
-        self.game = game
-        self.image = coin_image[0]
+        # self.game = game
         self.last_update = 0
         self.rect = self.image.get_rect()
-        self.location = random.choice(coins_locations)
-        self.last_location = self.location
-        self.rect.x = self.location[0]
-        self.rect.y = self.location[1]
+        self.position = choice(coins_monsters_positions)
+        self.last_position = self.position
+        self.rect.x = self.position[0]
+        self.rect.y = self.position[1]
 
     def change_position(self):
         current_time = pygame.time.get_ticks()
-        if current_time - self.last_update > 8000:
+        if current_time - self.last_update > self.time:
             self.last_update = current_time
-            while self.location == self.last_location:
-                self.location = random.choice(coins_locations)
-                self.rect.x = self.location[0]
-                self.rect.y = self.location[1]
-            self.last_location = self.location
+            # Prevent sprite to appear at the same spot
+            while self.position == self.last_position:
+                self.position = choice(coins_monsters_positions)
+                # Get x and y for monsters (different size than coins)
+                try:
+                    self.rect.x = self.position[0] - self.monster_position_x
+                    self.rect.y = self.position[1] - self.monster_position_y
+                # Get x and y for coins
+                except AttributeError:
+                    self.rect.x = self.position[0]
+                    self.rect.y = self.position[1]
+            self.last_position = self.position
+            # Get info whether monster is moving to change image (does not apply to coins)
+            try:
+                self.moving = True
+            except AttributeError:
+                pass
 
     def update(self):
         self.change_position()
+        # Change monster image (does not apply to coins)
+        try:
+            self.change_image()
+            self.moving = False
+        except AttributeError:
+            pass
+
+
+class Coin(InteractiveSprites):
+    def __init__(self):
+        self.image = coin_image[0]
+        self.time = 8000
+        super().__init__()
+        # Shrink rectangle so the collisions are less sensitive
+        self.rect.inflate_ip(-3.5, -3.5)
+
+
+class Monster(InteractiveSprites):
+    def __init__(self):
+        self.image = choice(monsters_images)
+        self.last_image = self.image
+        self.time = 5000
+        self.moving = False
+        super().__init__()
+        self.monster_position_x = 20
+        self.monster_position_y = 15
+        self.rect.x = self.rect.x - self.monster_position_x
+        self.rect.y = self.rect.y - self.monster_position_y
+
+    def change_image(self):
+        if self.moving:
+            while self.image == self.last_image:
+                self.image = choice(monsters_images)
+            self.last_image = self.image
